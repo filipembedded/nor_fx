@@ -1,0 +1,1 @@
+#include "nor_flash_lfs.h"
