@@ -42,7 +42,11 @@ enum norfx_status norfx_reset(struct norfx_device *dev)
         return NORFX_ERROR;
     }
 
-    // Ensure flash is ready here... 
+    enum norfx_status status = check_flash_ready(dev);
+    if (status != NORFX_SUCCESS)
+    {
+        return NORFX_TIMEOUT;
+    } 
 
     return NORFX_SUCCESS;
 }
@@ -150,10 +154,48 @@ static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset)
         return (4096 - offset);
 }
 
-/*
+
 static enum norfx_status check_flash_ready(struct norfx_device *dev)
 {
-    if (dev->)
+    uint8_t status_reg = 0;
+    uint32_t start_time_ms = 0;
+
+    if (dev == NULL)
+    {
+        return NORFX_ENODEV;
+    }
+
+    if (dev->spi_chip_select == NULL ||
+        dev->spi_chip_deselect == NULL ||
+        dev->spi_write == NULL ||
+        dev->spi_read == NULL ||
+        dev->get_tick_ms == NULL ||
+        dev->delay_ms == NULL)
+    {
+        return NORFX_EINVAL;
+    }
+
+    start_time_ms = dev->get_tick_ms(dev->context);
+
+    while(1)
+    {
+        enum norfx_status status = norfx_read_status_reg(dev, &status_reg);
+        if (status != NORFX_SUCCESS)
+        {
+            return status;
+        }
+
+        if ((status_reg & NORFX_WIP_MASK) == 0u)
+        {
+            return NORFX_SUCCESS;
+        }
+
+        if ((dev->get_tick_ms(dev->context) - start_time_ms) > NORFX_READY_TIMEOUT_MS)
+        {
+            return NORFX_TIMEOUT;
+        }
+
+        dev->delay_ms(dev->context, 1u);
+    }
 }
 
-*/

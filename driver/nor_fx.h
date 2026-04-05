@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define NORFX_WIP_MASK 0x01
+#define NORFX_READY_TIMEOUT_MS 50
+
 enum norfx_status {
 	NORFX_SUCCESS = 0,
 	NORFX_ERROR = 1,
@@ -73,6 +76,8 @@ struct norfx_device {
 	enum norfx_status(*spi_chip_deselect)(void *context);
 	enum norfx_status(*spi_write)(void *context, uint8_t *data, uint16_t size);
 	enum norfx_status(*spi_read)(void *context, uint8_t *data, uint16_t size);
+    uint32_t (*get_tick_ms)(void *context);
+    void (*delay_ms)(void *context, uint32_t delay);
 };
 
 enum norfx_status norfx_reset(struct norfx_device *dev);
