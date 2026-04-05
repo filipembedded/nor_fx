@@ -2,11 +2,47 @@
 #include <stdint.h>
 
 static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset);
-static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset);
+static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset);  
 
 enum norfx_status norfx_reset(struct norfx_device *dev)
 {
-    //TODO: Impl
+    uint8_t tx_buf[2] = {0};
+
+    if (dev == NULL)
+    {
+        return NORFX_ENODEV;
+    }
+
+    if (dev->spi_chip_deselect == NULL ||
+        dev->spi_chip_select == NULL ||
+        dev->spi_write == NULL ||
+        dev->spi_read == NULL)
+    {
+        return NORFX_EINVAL;
+    }
+
+    if (dev->spi_chip_select(dev->context) != NORFX_SUCCESS)
+    {
+        return NORFX_ERROR;
+    }
+
+    tx_buf[0] = INST_ENABLE_RESET;
+    tx_buf[1] = INST_RESET_DEVICE;
+
+    if (dev->spi_write(dev->context, tx_buf, 2) != NORFX_SUCCESS)
+    {
+        (void)dev->spi_chip_deselect(dev->context);
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_chip_deselect(dev->context) != NORFX_SUCCESS)
+    {
+        return NORFX_ERROR;
+    }
+
+    // Ensure flash is ready here... 
+
+    return NORFX_SUCCESS;
 }
 
 enum norfx_status norfx_read_id(struct norfx_device *dev, enum norfx_id_kind id)

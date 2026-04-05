@@ -9,7 +9,9 @@ enum norfx_status {
 	NORFX_ERROR = 1,
 	NORFX_READY = 2,
 	NORFX_BUSY = 3,
-	NORFX_TIMEOUT = 4
+	NORFX_TIMEOUT = 4,
+    NORFX_ENODEV = 5,
+    NORFX_EINVAL = 6
 };
 
 enum norfx_instruction {
@@ -67,14 +69,26 @@ enum norfx_id_kind {
 
 struct norfx_device {
 	void *context;
-	norfx_status(*spi_chip_select)(void *context);
-	norfx_status(*spi_chip_deselect)(void *context);
-	norfx_status(*spi_write)(void *context, uint8_t *data, uint16_t size);
-	norfx_status(*spi_read)(void *context, uint8_t *data, uint16_t size);
+	enum norfx_status(*spi_chip_select)(void *context);
+	enum norfx_status(*spi_chip_deselect)(void *context);
+	enum norfx_status(*spi_write)(void *context, uint8_t *data, uint16_t size);
+	enum norfx_status(*spi_read)(void *context, uint8_t *data, uint16_t size);
 };
 
+enum norfx_status norfx_reset(struct norfx_device *dev);
+enum norfx_status norfx_read_id(struct norfx_device *dev, enum norfx_id_kind id);
+enum norfx_status norfx_read(struct norfx_device *dev,                                     uint32_t start_page,
+                            uint8_t offset,
+                            uint32_t size,
+                            uint8_t *r_data);
+enum norfx_status norfx_fast_read(struct norfx_device *dev,                                     uint32_t start_page,
+                            uint8_t offset,
+                            uint32_t size,
+                            uint8_t *r_data);
 
-
-
+enum norfx_status norfx_write_enable(struct norfx_device *dev);
+enum norfx_status norfx_write_disable(struct norfx_device *dev);
+enum norfx_status norfx_erase_sector(struct norfx_device *dev);
+uint8_t norfx_read_status_reg(struct norfx_device *dev);
 
 #endif // NOR_FX_H
