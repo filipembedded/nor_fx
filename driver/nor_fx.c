@@ -45,7 +45,7 @@ enum norfx_status norfx_reset(struct norfx_device *dev)
     enum norfx_status status = check_flash_ready(dev);
     if (status != NORFX_SUCCESS)
     {
-        return NORFX_TIMEOUT;
+        return status;
     } 
 
     return NORFX_SUCCESS;
@@ -98,6 +98,90 @@ enum norfx_status norfx_read_status_reg(struct norfx_device *dev, uint8_t *statu
     return NORFX_SUCCESS;
 }
 
+enum norfx_status norfx_write_enable(struct norfx_device *dev)
+{
+    uint8_t tx_buf = INST_WRITE_ENABLE;
+
+    if (dev == NULL)
+    {
+        return NORFX_ENODEV;
+    }
+
+    if (dev->spi_chip_deselect == NULL ||
+        dev->spi_chip_select == NULL ||
+        dev->spi_write == NULL ||
+        dev->spi_read == NULL)
+    {
+        return NORFX_EINVAL;
+    }
+    
+    if (dev->spi_chip_select(dev->context) != NORFX_SUCCESS)
+    {
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_write(dev->context, &tx_buf, 1) != NORFX_SUCCESS)
+    {
+        (void)dev->spi_chip_deselect(dev->context);
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_chip_deselect(dev->context) != NORFX_SUCCESS)
+    {
+        return NORFX_ERROR;
+    }
+
+    enum norfx_status status = check_flash_ready(dev);
+    if (status != NORFX_SUCCESS)
+    {
+        return status;
+    }
+
+    return NORFX_SUCCESS;
+}
+
+enum norfx_status norfx_write_disable(struct norfx_device *dev)
+{
+    uint8_t tx_buf = INST_WRITE_DISABLE;
+
+    if (dev == NULL)
+    {
+        return NORFX_ENODEV;
+    }
+
+    if (dev->spi_chip_deselect == NULL ||
+        dev->spi_chip_select == NULL ||
+        dev->spi_write == NULL ||
+        dev->spi_read == NULL)
+    {
+        return NORFX_EINVAL;
+    }
+    
+    if (dev->spi_chip_select(dev->context) != NORFX_SUCCESS)
+    {
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_write(dev->context, &tx_buf, 1) != NORFX_SUCCESS)
+    {
+        (void)dev->spi_chip_deselect(dev->context);
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_chip_deselect(dev->context) != NORFX_SUCCESS)
+    {
+        return NORFX_ERROR;
+    }
+
+    enum norfx_status status = check_flash_ready(dev);
+    if (status != NORFX_SUCCESS)
+    {
+        return status;
+    }
+
+    return NORFX_SUCCESS;
+}
+
 enum norfx_status norfx_read_id(struct norfx_device *dev, enum norfx_id_kind id)
 {
     //TODO: Impl
@@ -117,16 +201,6 @@ enum norfx_status norfx_fast_read(struct norfx_device *dev,                     
                             uint8_t *r_data)
 {
     //TODO: Impl
-}
-
-enum norfx_status norfx_write_enable(struct norfx_device *dev)
-{
-
-}
-
-enum norfx_status norfx_write_disable(struct norfx_device *dev)
-{
-
 }
 
 enum norfx_status norfx_erase_sector(struct norfx_device *dev)
