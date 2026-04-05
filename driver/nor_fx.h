@@ -89,6 +89,6 @@ enum norfx_status norfx_fast_read(struct norfx_device *dev,                     
 enum norfx_status norfx_write_enable(struct norfx_device *dev);
 enum norfx_status norfx_write_disable(struct norfx_device *dev);
 enum norfx_status norfx_erase_sector(struct norfx_device *dev);
-uint8_t norfx_read_status_reg(struct norfx_device *dev);
+enum norfx_status norfx_read_status_reg(struct norfx_device *dev, uint8_t *status_reg);
 
 #endif // NOR_FX_H
