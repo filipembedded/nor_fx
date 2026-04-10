@@ -1,6 +1,17 @@
+/**
+ * @file nor_fx.c
+ * @brief Cross-platform NOR flash driver — implementation.
+ *
+ * All public functions are documented in nor_fx.h.
+ * Static helper functions are documented here at the point of definition.
+ */
+
 #include "nor_fx.h"
 #include <stdint.h>
 
+/* ---------------------------------------------------------------------------
+ * Static forward declarations
+ * ------------------------------------------------------------------------- */
 static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset);
 static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset);
 static enum norfx_status check_flash_ready(struct norfx_device *dev, uint32_t timeout_ms);
@@ -616,7 +627,18 @@ enum norfx_status norfx_write(struct norfx_device *dev,
     return NORFX_SUCCESS;
 }
 
-/* Helpers */
+/* ---------------------------------------------------------------------------
+ * Static helpers
+ * ------------------------------------------------------------------------- */
+
+/**
+ * @brief Calculate how many bytes fit in the current page.
+ *
+ * @param size    Remaining bytes to write.
+ * @param offset  Current byte offset within a 256-byte page.
+ * @return        Number of bytes that can be written without crossing a
+ *                page boundary.
+ */
 static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset)
 {
     if ((size + offset) < 256)
@@ -625,6 +647,14 @@ static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset)
         return (256 - offset);
 }
 
+/**
+ * @brief Calculate how many bytes fall within the current sector.
+ *
+ * @param size    Remaining bytes to modify.
+ * @param offset  Current byte offset within a 4096-byte sector.
+ * @return        Number of bytes that can be modified without crossing a
+ *                sector boundary.
+ */
 static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset)
 {
     if ((size + offset) < 4096)
@@ -634,6 +664,18 @@ static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset)
 }
 
 
+/**
+ * @brief Poll Status Register 1 until WIP clears or the timeout expires.
+ *
+ * Reads SR1 in a loop, sleeping 1 ms between polls. The timeout is
+ * wraparound-safe as long as the elapsed time does not exceed UINT32_MAX ms.
+ *
+ * @param[in] dev         Initialised device handle.
+ * @param[in] timeout_ms  Maximum time to wait in milliseconds.
+ * @return                @ref NORFX_SUCCESS when WIP == 0,
+ *                        @ref NORFX_TIMEOUT if the timeout elapses,
+ *                        or any error returned by @ref norfx_read_status_reg.
+ */
 static enum norfx_status check_flash_ready(struct norfx_device *dev, uint32_t timeout_ms)
 {
     uint8_t status_reg = 0;
@@ -678,6 +720,12 @@ static enum norfx_status check_flash_ready(struct norfx_device *dev, uint32_t ti
     }
 }
 
+/**
+ * @brief Validate that @p id is a member of @ref norfx_id_kind.
+ *
+ * @param[in] id  ID kind to validate.
+ * @return        @ref NORFX_SUCCESS if valid, @ref NORFX_EINVAL otherwise.
+ */
 static enum norfx_status check_id_kind(enum norfx_id_kind id)
 {
     enum norfx_status status;
@@ -693,6 +741,19 @@ static enum norfx_status check_id_kind(enum norfx_id_kind id)
     return status;
 }
 
+/**
+ * @brief Return the total SPI receive length for a given ID type.
+ *
+ * Includes any dummy bytes required before the actual ID payload.
+ *
+ * @param[in] id  ID kind.
+ * @return        Number of bytes to clock in after sending the opcode:
+ *                - @ref ID_JEDEC               → 3  (MFR | MemType | Capacity)
+ *                - @ref ID_MANUFACTURER_DEVICE → 5  (3 dummy addr + MFR | DevID)
+ *                - @ref ID_RELEASE_POWER_DOWN  → 4  (3 dummy addr + DevID)
+ *                - @ref ID_READ_UNIQUE         → 12 (4 dummy + 8-byte UID)
+ *                - unknown                     → 0
+ */
 static uint8_t get_id_size(enum norfx_id_kind id)
 {
     uint8_t id_size = 0;
@@ -718,6 +779,18 @@ static uint8_t get_id_size(enum norfx_id_kind id)
     return id_size;
 }
 
+/**
+ * @brief Extract a 32-bit ID value from a raw SPI receive buffer.
+ *
+ * Each ID type has a different byte layout; this function handles the
+ * correct extraction and packing for all supported ID kinds.
+ *
+ * @param[in]  rx_buf  Raw bytes received from the device (including dummy bytes).
+ * @param[in]  id      ID kind that determines the byte layout.
+ * @param[out] id_val  Decoded identifier.
+ * @return             @ref NORFX_SUCCESS, or @ref NORFX_EINVAL if any pointer
+ *                     is NULL or @p id is unrecognised.
+ */
 static enum norfx_status convert_buf_to_id(uint8_t *rx_buf, enum norfx_id_kind id, uint32_t *id_val)
 {
     if (rx_buf == NULL || id_val == NULL)
