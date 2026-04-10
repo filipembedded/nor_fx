@@ -1,10 +1,9 @@
 #include "nor_fx.h"
 #include <stdint.h>
-#include <stdbool.h>
 
 static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset);
 static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset);
-static enum norfx_status check_flash_ready(struct norfx_device *dev);
+static enum norfx_status check_flash_ready(struct norfx_device *dev, uint32_t timeout_ms);
 static enum norfx_status check_id_kind(enum norfx_id_kind id);
 static uint8_t get_id_size(enum norfx_id_kind id);
 static enum norfx_status convert_buf_to_id(uint8_t *rx_buf, enum norfx_id_kind id, uint32_t *id_val);
@@ -45,7 +44,7 @@ enum norfx_status norfx_reset(struct norfx_device *dev)
         return NORFX_ERROR;
     }
 
-    enum norfx_status status = check_flash_ready(dev);
+    enum norfx_status status = check_flash_ready(dev, NORFX_RESET_TIMEOUT_MS);
     if (status != NORFX_SUCCESS)
     {
         return status;
@@ -134,7 +133,7 @@ enum norfx_status norfx_write_enable(struct norfx_device *dev)
         return NORFX_ERROR;
     }
 
-    enum norfx_status status = check_flash_ready(dev);
+    enum norfx_status status = check_flash_ready(dev, NORFX_WRITE_EN_TIMEOUT_MS);
     if (status != NORFX_SUCCESS)
     {
         return status;
@@ -176,7 +175,7 @@ enum norfx_status norfx_write_disable(struct norfx_device *dev)
         return NORFX_ERROR;
     }
 
-    enum norfx_status status = check_flash_ready(dev);
+    enum norfx_status status = check_flash_ready(dev, NORFX_WRITE_EN_TIMEOUT_MS);
     if (status != NORFX_SUCCESS)
     {
         return status;
@@ -298,7 +297,7 @@ enum norfx_status norfx_read(struct norfx_device *dev,
         return NORFX_EINVAL;
     }
 
-    uint8_t tx_buf[4];
+    uint8_t tx_buf[4] = {0};
     uint32_t mem_addr = (start_page * 256) + offset;
     tx_buf[0] = INST_READ_DATA;
     tx_buf[1] = (mem_addr >> 16) & 0xFF; // MSB of 24-bit memory address
@@ -387,14 +386,72 @@ enum norfx_status norfx_fast_read(struct norfx_device *dev,
     return NORFX_SUCCESS;
 }
 
-enum norfx_status norfx_erase_sector(struct norfx_device *dev)
+enum norfx_status norfx_erase_sector(struct norfx_device *dev, uint16_t num_sector)
 {
+    enum norfx_status status;
+    uint8_t tx_buf[4] = {0};
 
+    if (dev == NULL)
+    {
+        return NORFX_ENODEV;
+    }
+
+    if (dev->spi_chip_select == NULL ||
+        dev->spi_chip_deselect == NULL ||
+        dev->spi_write == NULL ||
+        dev->spi_read == NULL)
+    {
+        return NORFX_EINVAL;
+    }
+
+    // Sector contains 16 pages, page contains 256 bytes
+    uint32_t mem_addr = num_sector*16*256;
+
+    status = norfx_write_enable(dev);
+    if (status != NORFX_SUCCESS)
+    {
+        return status;
+    }
+
+    tx_buf[0] = INST_SECTOR_ERASE_4KB;
+    tx_buf[1] = (mem_addr >> 16) & 0xFF; // MSB of a 24-bit memory address
+    tx_buf[2] = (mem_addr >> 8) & 0xFF;
+    tx_buf[3] = (mem_addr) & 0xFF;       // LSB of a 24-bit memory address
+
+    if (dev->spi_chip_select(dev->context) != NORFX_SUCCESS)
+    {
+        (void)norfx_write_disable(dev);
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_write(dev->context, tx_buf, sizeof(tx_buf)) != NORFX_SUCCESS)
+    {
+        (void)dev->spi_chip_deselect(dev->context);
+        (void)norfx_write_disable(dev);
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_chip_deselect(dev->context) != NORFX_SUCCESS)
+    {
+        (void)norfx_write_disable(dev);
+        return NORFX_ERROR;
+    }
+
+    status = check_flash_ready(dev, NORFX_SECTOR_ERASE_TIMEOUT_MS);
+    if (status != NORFX_SUCCESS)
+    {
+        (void)norfx_write_disable(dev);
+        return status;
+    }
+
+    status = norfx_write_disable(dev);
+    if (status != NORFX_SUCCESS)
+    {
+        return status;
+    }
+
+    return NORFX_SUCCESS;
 }
-
-
-
-
 
 static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset)
 {
@@ -413,7 +470,7 @@ static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset)
 }
 
 
-static enum norfx_status check_flash_ready(struct norfx_device *dev)
+static enum norfx_status check_flash_ready(struct norfx_device *dev, uint32_t timeout_ms)
 {
     uint8_t status_reg = 0;
     uint32_t start_time_ms = 0;
@@ -448,7 +505,7 @@ static enum norfx_status check_flash_ready(struct norfx_device *dev)
             return NORFX_SUCCESS;
         }
 
-        if ((dev->get_tick_ms(dev->context) - start_time_ms) > NORFX_READY_TIMEOUT_MS)
+        if ((dev->get_tick_ms(dev->context) - start_time_ms) > timeout_ms)
         {
             return NORFX_TIMEOUT;
         }

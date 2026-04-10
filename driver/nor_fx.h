@@ -4,8 +4,12 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define NORFX_WIP_MASK 0x01
-#define NORFX_READY_TIMEOUT_MS 50
+#define NORFX_WIP_MASK                  0x01u
+#define NORFX_RESET_TIMEOUT_MS          50u
+#define NORFX_WRITE_EN_TIMEOUT_MS       10u
+#define NORFX_SECTOR_ERASE_TIMEOUT_MS   400u
+#define NORFX_BLOCK_ERASE_TIMEOUT_MS    2000u
+#define NORFX_PAGE_PROGRAM_TIMEOUT_MS   3u
 
 enum norfx_status {
 	NORFX_SUCCESS = 0,
@@ -95,7 +99,7 @@ enum norfx_status norfx_fast_read(struct norfx_device *dev,
 
 enum norfx_status norfx_write_enable(struct norfx_device *dev);
 enum norfx_status norfx_write_disable(struct norfx_device *dev);
-enum norfx_status norfx_erase_sector(struct norfx_device *dev);
+enum norfx_status norfx_erase_sector(struct norfx_device *dev, uint16_t num_sector);
 enum norfx_status norfx_read_status_reg(struct norfx_device *dev, uint8_t *status_reg);
 
 #endif // NOR_FX_H
