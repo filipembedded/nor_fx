@@ -81,7 +81,7 @@ struct norfx_device {
 };
 
 enum norfx_status norfx_reset(struct norfx_device *dev);
-enum norfx_status norfx_read_id(struct norfx_device *dev, enum norfx_id_kind id);
+enum norfx_status norfx_read_id(struct norfx_device *dev, enum norfx_id_kind id, uint32_t *id_val);
 enum norfx_status norfx_read(struct norfx_device *dev,                                     uint32_t start_page,
                             uint8_t offset,
                             uint32_t size,
