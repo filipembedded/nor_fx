@@ -101,5 +101,26 @@ enum norfx_status norfx_write_enable(struct norfx_device *dev);
 enum norfx_status norfx_write_disable(struct norfx_device *dev);
 enum norfx_status norfx_erase_sector(struct norfx_device *dev, uint16_t num_sector);
 enum norfx_status norfx_read_status_reg(struct norfx_device *dev, uint8_t *status_reg);
+enum norfx_status norfx_page_program(struct norfx_device *dev,
+                                    uint32_t page,
+                                    uint16_t offset,
+                                    uint32_t size,
+                                    uint8_t *data);
+
+/**
+ * @brief Write arbitrary data starting at a given page and offset.
+ *
+ * Performs read-modify-write on affected sectors. The caller must provide
+ * a scratch buffer of exactly 4096 bytes (one sector) used for temporary
+ * sector data — avoids placing 4KB on the stack.
+ *
+ * @param scratch_buf  Caller-provided 4096-byte buffer.
+ */
+enum norfx_status norfx_write(struct norfx_device *dev,
+                              uint32_t page,
+                              uint16_t offset,
+                              uint32_t size,
+                              uint8_t *data,
+                              uint8_t *scratch_buf);
 
 #endif // NOR_FX_H

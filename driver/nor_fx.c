@@ -453,6 +453,170 @@ enum norfx_status norfx_erase_sector(struct norfx_device *dev, uint16_t num_sect
     return NORFX_SUCCESS;
 }
 
+enum norfx_status norfx_page_program(struct norfx_device *dev,
+                                    uint32_t page,
+                                    uint16_t offset,
+                                    uint32_t size,
+                                    uint8_t *data)
+{
+    enum norfx_status status;
+    uint8_t tx_buf[4] = {0};
+
+    if (dev == NULL)
+    {
+        return NORFX_ENODEV;
+    }
+
+    if (dev->spi_chip_select == NULL ||
+        dev->spi_chip_deselect == NULL ||
+        dev->spi_write == NULL ||
+        dev->spi_read == NULL)
+    {
+        return NORFX_EINVAL;
+    }
+
+    if (data == NULL || size == 0u || offset > 255u)
+    {
+        return NORFX_EINVAL;
+    }
+
+    uint32_t mem_addr = (page * 256u) + offset;
+    tx_buf[0] = INST_PAGE_PROGRAM;
+    tx_buf[1] = (mem_addr >> 16) & 0xFFu; // MSB of 24-bit memory address
+    tx_buf[2] = (mem_addr >> 8)  & 0xFFu;
+    tx_buf[3] = (mem_addr)       & 0xFFu; // LSB of 24-bit memory address
+
+    status = norfx_write_enable(dev);
+    if (status != NORFX_SUCCESS)
+    {
+        return status;
+    }
+
+    if (dev->spi_chip_select(dev->context) != NORFX_SUCCESS)
+    {
+        (void)norfx_write_disable(dev);
+        return NORFX_ERROR;
+    }
+
+    /* Send 4-byte header: opcode + 24-bit address */
+    if (dev->spi_write(dev->context, tx_buf, sizeof(tx_buf)) != NORFX_SUCCESS)
+    {
+        (void)dev->spi_chip_deselect(dev->context);
+        (void)norfx_write_disable(dev);
+        return NORFX_ERROR;
+    }
+
+    /* Send data directly — no copy into intermediate buffer */
+    if (dev->spi_write(dev->context, data, (uint16_t)size) != NORFX_SUCCESS)
+    {
+        (void)dev->spi_chip_deselect(dev->context);
+        (void)norfx_write_disable(dev);
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_chip_deselect(dev->context) != NORFX_SUCCESS)
+    {
+        (void)norfx_write_disable(dev);
+        return NORFX_ERROR;
+    }
+
+    status = check_flash_ready(dev, NORFX_PAGE_PROGRAM_TIMEOUT_MS);
+    if (status != NORFX_SUCCESS)
+    {
+        (void)norfx_write_disable(dev);
+        return status;
+    }
+
+    status = norfx_write_disable(dev);
+    if (status != NORFX_SUCCESS)
+    {
+        return status;
+    }
+
+    return NORFX_SUCCESS;
+}
+
+
+enum norfx_status norfx_write(struct norfx_device *dev,
+                              uint32_t page,
+                              uint16_t offset,
+                              uint32_t size,
+                              uint8_t *data,
+                              uint8_t *scratch_buf)
+{
+    enum norfx_status status;
+
+    if (dev == NULL)
+    {
+        return NORFX_ENODEV;
+    }
+
+    if (dev->spi_chip_select == NULL ||
+        dev->spi_chip_deselect == NULL ||
+        dev->spi_write == NULL ||
+        dev->spi_read == NULL)
+    {
+        return NORFX_EINVAL;
+    }
+
+    if (data == NULL || scratch_buf == NULL || size == 0u)
+    {
+        return NORFX_EINVAL;
+    }
+
+    uint16_t start_sector = (uint16_t)(page / 16u);
+    uint16_t end_sector   = (uint16_t)((page + ((size + offset - 1u) / 256u)) / 16u);
+    uint16_t num_sectors  = end_sector - start_sector + 1u;
+
+    uint32_t sector_offset = ((page % 16u) * 256u) + offset;
+    uint32_t data_index    = 0u;
+
+    for (uint16_t i = 0u; i < num_sectors; i++)
+    {
+        uint32_t start_page = (uint32_t)start_sector * 16u;
+
+        /* 1. Read full sector into scratch buffer */
+        status = norfx_fast_read(dev, start_page, 0u, 4096u, scratch_buf);
+        if (status != NORFX_SUCCESS)
+        {
+            return status;
+        }
+
+        /* 2. Overlay new data onto the scratch buffer */
+        uint32_t bytes_to_modify = calculate_bytes_to_modify(size, (uint16_t)sector_offset);
+        for (uint32_t j = 0u; j < bytes_to_modify; j++)
+        {
+            scratch_buf[j + sector_offset] = data[j + data_index];
+        }
+
+        /* 3. Erase sector */
+        status = norfx_erase_sector(dev, start_sector);
+        if (status != NORFX_SUCCESS)
+        {
+            return status;
+        }
+
+        /* 4. Write sector back page by page */
+        for (uint32_t p = 0u; p < 16u; p++)
+        {
+            status = norfx_page_program(dev, start_page + p, 0u, 256u,
+                                        &scratch_buf[p * 256u]);
+            if (status != NORFX_SUCCESS)
+            {
+                return status;
+            }
+        }
+
+        start_sector++;
+        sector_offset  = 0u;
+        data_index    += bytes_to_modify;
+        size          -= (uint32_t)bytes_to_modify;
+    }
+
+    return NORFX_SUCCESS;
+}
+
+/* Helpers */
 static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset)
 {
     if ((size + offset) < 256)
