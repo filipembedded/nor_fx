@@ -12,7 +12,6 @@
 /* ---------------------------------------------------------------------------
  * Static forward declarations
  * ------------------------------------------------------------------------- */
-static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset);
 static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset);
 static enum norfx_status check_flash_ready(struct norfx_device *dev, uint32_t timeout_ms);
 static enum norfx_status check_id_kind(enum norfx_id_kind id);
@@ -326,7 +325,7 @@ enum norfx_status norfx_read(struct norfx_device *dev,
         return NORFX_ERROR;
     }
 
-    if (dev->spi_read(dev->context, rx_buf, size) != NORFX_SUCCESS)
+    if (dev->spi_read(dev->context, rx_buf, (uint16_t)size) != NORFX_SUCCESS)
     {
         (void)dev->spi_chip_deselect(dev->context);
         return NORFX_ERROR;
@@ -383,7 +382,7 @@ enum norfx_status norfx_fast_read(struct norfx_device *dev,
         return NORFX_ERROR;
     }
 
-    if (dev->spi_read(dev->context, rx_buf, size) != NORFX_SUCCESS)
+    if (dev->spi_read(dev->context, rx_buf, (uint16_t)size) != NORFX_SUCCESS)
     {
         (void)dev->spi_chip_deselect(dev->context);
         return NORFX_ERROR;
@@ -577,7 +576,7 @@ enum norfx_status norfx_write(struct norfx_device *dev,
 
     uint16_t start_sector = (uint16_t)(page / 16u);
     uint16_t end_sector   = (uint16_t)((page + ((size + offset - 1u) / 256u)) / 16u);
-    uint16_t num_sectors  = end_sector - start_sector + 1u;
+    uint16_t num_sectors  = (uint16_t)(end_sector - start_sector + 1u);
 
     uint32_t sector_offset = ((page % 16u) * 256u) + offset;
     uint32_t data_index    = 0u;
@@ -630,22 +629,6 @@ enum norfx_status norfx_write(struct norfx_device *dev,
 /* ---------------------------------------------------------------------------
  * Static helpers
  * ------------------------------------------------------------------------- */
-
-/**
- * @brief Calculate how many bytes fit in the current page.
- *
- * @param size    Remaining bytes to write.
- * @param offset  Current byte offset within a 256-byte page.
- * @return        Number of bytes that can be written without crossing a
- *                page boundary.
- */
-static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset)
-{
-    if ((size + offset) < 256)
-        return size; 
-    else 
-        return (256 - offset);
-}
 
 /**
  * @brief Calculate how many bytes fall within the current sector.

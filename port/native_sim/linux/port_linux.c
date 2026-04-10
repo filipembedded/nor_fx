@@ -15,6 +15,9 @@
  *  - JEDEC ID: returns Winbond W25Q128JV values (EF 70 18).
  */
 
+/* Request POSIX.1-2008 interfaces: ftruncate, pwrite, clock_gettime, nanosleep */
+#define _POSIX_C_SOURCE 200809L
+
 #include "port_linux.h"
 #include "nor_fx.h"
 
