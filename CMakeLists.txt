@@ -34,6 +34,19 @@ add_compile_options(
 # ---------------------------------------------------------------------------
 add_subdirectory(driver)
 
+# littlefs — build from the sibling submodule when building standalone
+if(PROJECT_IS_TOP_LEVEL AND NOT TARGET lfs)
+    add_library(lfs STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../littlefs/lfs.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../littlefs/lfs_util.c
+    )
+    target_include_directories(lfs PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../littlefs
+    )
+    # Suppress warnings in third-party code
+    target_compile_options(lfs PRIVATE -w)
+endif()
+
 # littlefs glue layer — only if the consumer provides a `lfs` target
 if(TARGET lfs)
     add_subdirectory(fs/littlefs)

@@ -2,7 +2,7 @@
 # This file is only included from the root when that target exists.
 
 add_library(norfx_lfs STATIC
-    nor_flash_lfs.c
+    nor_fx_lfs.c
 )
 
 target_include_directories(norfx_lfs

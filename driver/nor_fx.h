@@ -23,6 +23,22 @@
 #define NORFX_WIP_MASK                  0x01u
 /** @} */
 
+/** @defgroup norfx_geometry Flash geometry constants
+ *
+ * Physical parameters of the supported NOR flash device (W25Q128JV).
+ * The LFS adapter layer uses these as the single source of truth when
+ * translating between littlefs block/offset coordinates and driver
+ * page/offset coordinates.
+ *
+ * @note These will be replaced by a runtime config struct in a future
+ *       revision to support devices with different geometries.
+ *  @{
+ */
+#define NORFX_PAGE_SIZE     256u        /**< Bytes per programmable page        */
+#define NORFX_SECTOR_SIZE   4096u       /**< Bytes per erasable sector (4 KB)   */
+#define NORFX_BLOCK_COUNT   4096u       /**< Total number of sectors (16 MB)    */
+/** @} */
+
 /** @defgroup norfx_timeouts Per-operation busy-wait timeout values (milliseconds)
  *
  * Derived from W25Q128JV datasheet worst-case timing.
