@@ -330,12 +330,61 @@ enum norfx_status norfx_read(struct norfx_device *dev,
     return NORFX_SUCCESS;
 }
 
-enum norfx_status norfx_fast_read(struct norfx_device *dev,                                     uint32_t start_page,
+enum norfx_status norfx_fast_read(struct norfx_device *dev,
+                            uint32_t start_page,
                             uint8_t offset,
                             uint32_t size,
-                            uint8_t *r_data)
+                            uint8_t *rx_buf)
 {
-    //TODO: Impl
+    if (dev == NULL)
+    {
+        return NORFX_ENODEV;
+    }
+
+    if (dev->spi_chip_select == NULL ||
+        dev->spi_chip_deselect == NULL ||
+        dev->spi_write == NULL ||
+        dev->spi_read == NULL)
+    {
+        return NORFX_EINVAL;
+    }
+
+    if (rx_buf == NULL)
+    {
+        return NORFX_EINVAL;
+    }
+
+    uint8_t tx_buf[5] = {0};
+    uint32_t mem_addr = (start_page * 256) + offset;
+    tx_buf[0] = INST_FAST_READ;
+    tx_buf[1] = (mem_addr >> 16) & 0xFF; // MSB of 24-bit memory address
+    tx_buf[2] = (mem_addr >> 8) & 0xFF;
+    tx_buf[3] = (mem_addr) & 0xFF;       // LSB of 24-bit memory address
+    tx_buf[4] = 0x00;
+
+    if (dev->spi_chip_select(dev->context) != NORFX_SUCCESS)
+    {
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_write(dev->context, tx_buf, sizeof(tx_buf)) != NORFX_SUCCESS)
+    {
+        (void)dev->spi_chip_deselect(dev->context);
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_read(dev->context, rx_buf, size) != NORFX_SUCCESS)
+    {
+        (void)dev->spi_chip_deselect(dev->context);
+        return NORFX_ERROR;
+    }
+
+    if (dev->spi_chip_deselect(dev->context) != NORFX_SUCCESS)
+    {
+        return NORFX_ERROR;
+    }
+
+    return NORFX_SUCCESS;
 }
 
 enum norfx_status norfx_erase_sector(struct norfx_device *dev)

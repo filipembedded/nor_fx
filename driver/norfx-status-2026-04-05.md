@@ -1,49 +1,65 @@
-# NORFX status snapshot (2026-04-05)
+# NORFX status snapshot (2026-04-10)
 
 ## Scope
 `nor-flash-xplat/driver/nor_fx.c` i `nor-flash-xplat/driver/nor_fx.h`
 
-## Trenutno urađeno
-- `norfx_reset()`
-  - Validira `dev` i callback-e.
-  - Šalje `INST_ENABLE_RESET` + `INST_RESET_DEVICE`.
-  - Urađen `chip_deselect` i propagacija statusa iz `check_flash_ready()`.
-- `norfx_read_status_reg()`
-  - Potpis usklađen (`uint8_t *status_reg`) i u `.h` i u `.c`.
-  - Validacija ulaza + kompletan `CS` tok (`select -> write -> read -> deselect`).
-- `check_flash_ready()`
-  - Polling `SR1` (`NORFX_WIP_MASK`) sa timeout-om (`NORFX_READY_TIMEOUT_MS`).
-  - Koristi `get_tick_ms` i `delay_ms` callback-e iz `struct norfx_device`.
-- `norfx_write_enable()`
-  - Slanje `INST_WRITE_ENABLE`, cleanup i `check_flash_ready()`.
-- `norfx_write_disable()`
-  - Slanje `INST_WRITE_DISABLE`, cleanup i `check_flash_ready()`.
+## Trenutno urađeno (2026-04-10)
+- `norfx_reset()` — 9/10, solidno
+- `norfx_read_status_reg()` — 9/10, solidno
+- `norfx_write_enable()` — 8/10, nema WEL verifikacije (videti otvorene probleme)
+- `norfx_write_disable()` — 8/10, nema WEL verifikacije (videti otvorene probleme)
+- `norfx_read_id()` — 9/10, podržava sve 4 ID varijante (`JEDEC`, `MFR_DEV`, `RELEASE_PD`, `UNIQUE`)
+  - Interni helperi: `get_id_size()`, `convert_buf_to_id()`, `check_id_kind()`
+- `norfx_read()` — 9/10, solidno
+- `check_flash_ready()` — 9/10, WIP polling sa timeout-om i callback-ima
 
-## Trenutni otvoreni problemi
-1. `norfx_write_enable()` i `norfx_write_disable()` ne verifikuju `WEL` bit (`SR1 bit1`).
-   - Trenutno se proverava samo `WIP` (busy/ready), što nije isto što i write-latch stanje.
-2. `norfx_erase_sector()` je prazna funkcija.
-3. `norfx_read_id()`, `norfx_read()`, `norfx_fast_read()` imaju `//TODO: Impl`.
-4. `NORFX_READY_TIMEOUT_MS` je trenutno globalno `50 ms`.
-   - To je često OK za kratke operacije, ali nije dovoljno za erase/program tokove.
+## Otvoreni problemi
+1. **`norfx_write_enable/disable` — nema WEL verifikacije** (prioritet kada se bude radilo)
+   - Detaljan predlog implementacije:
+     ```c
+     #define NORFX_WEL_MASK  0x02u
 
-## Predlog prioriteta za sutra (redosled)
-1. Dodati `WEL` proveru posle `write_enable` i `write_disable`.
-2. Implementirati `norfx_erase_sector()`:
-   - `write_enable -> erase_cmd+addr -> check_flash_ready -> write_disable (opciono)`.
-3. Implementirati `norfx_read_id()` (bar `ID_JEDEC`) za sanity check čipa.
-4. Implementirati `norfx_read()` i `norfx_fast_read()`.
-5. Razdvojiti timeout konstante po operaciji (reset/read/program/erase).
+     // write_enable — posle check_flash_ready:
+     uint8_t sr = 0;
+     enum norfx_status st = norfx_read_status_reg(dev, &sr);
+     if (st != NORFX_SUCCESS) return st;
+     if ((sr & NORFX_WEL_MASK) == 0u) return NORFX_ERROR;
 
-## Predlog helper makroa/bitova
-- `NORFX_WIP_MASK` = `0x01u` (već postoji)
-- `NORFX_WEL_MASK` = `0x02u` (dodati)
+     // write_disable — posle check_flash_ready:
+     uint8_t sr = 0;
+     enum norfx_status st = norfx_read_status_reg(dev, &sr);
+     if (st != NORFX_SUCCESS) return st;
+     if ((sr & NORFX_WEL_MASK) != 0u) return NORFX_ERROR;
+     ```
+   - Opciono: centralizovati u `static enum norfx_status verify_wel(dev, uint8_t expected_wel)`
+     koji prima `1u` za enable i `0u` za disable.
+   - Koristiti i u `erase_sector`/`page_program` kao preduslov.
 
-## Brzi acceptance kriterijumi
-- `write_enable` vraća uspeh samo ako je `WEL=1`.
-- `write_disable` vraća uspeh samo ako je `WEL=0`.
-- `erase_sector` ima timeout zaštitu i ne ostavlja aktivan `CS` ni na error putu.
-- `read_status_reg` ostaje usklađen između `.h` i `.c`.
+2. **`norfx_fast_read()` — nije implementirana** (`//TODO: Impl`)
+
+3. **`norfx_erase_sector()` — prazna funkcija**
+   - Tok: `write_enable -> erase_cmd+addr -> check_flash_ready`
+   - Timeout za erase je duži od `50ms` — razdvojiti konstantu.
+
+4. **`NORFX_READY_TIMEOUT_MS = 50ms` je globalno** — premalo za erase/program.
+   - Predlog: odvojene konstante `NORFX_ERASE_TIMEOUT_MS`, `NORFX_PROGRAM_TIMEOUT_MS`.
+
+5. **Sitnice u `norfx_read`**:
+   - `tx_buf[4]` nije inicijalizovan — dodati `= {0}`.
+   - `size == 0` nije zaštićen.
+
+6. **`stdbool.h`** je uključen ali `bool` se ne koristi — ukloniti.
+
+## Predlog prioriteta (sledeći korak)
+1. Implementirati `norfx_erase_sector()`.
+2. Implementirati `norfx_fast_read()`.
+3. Dodati WEL verifikaciju u `write_enable/disable`.
+4. Razdvojiti timeout konstante.
+5. Sitne ispravke u `norfx_read`.
+
+## Makroi/bitovi
+- `NORFX_WIP_MASK` = `0x01u` ✅ (postoji)
+- `NORFX_WEL_MASK` = `0x02u` ⬜ (dodati u `nor_fx.h`)
 
 ## Napomena
-Nije rađeno uvodjenje QSPI/OSPI u ovoj fazi — fokus ostaje `SPI-only v1`.
+Nije rađeno uvođenje QSPI/OSPI u ovoj fazi — fokus ostaje `SPI-only v1`.
