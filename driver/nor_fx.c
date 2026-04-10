@@ -6,7 +6,8 @@ static uint32_t calculate_bytes_to_write(uint32_t size, uint16_t offset);
 static uint32_t calculate_bytes_to_modify(uint32_t size, uint16_t offset);
 static enum norfx_status check_flash_ready(struct norfx_device *dev);
 static enum norfx_status check_id_kind(enum norfx_id_kind id);
-static enum norfx_status convert_buf_to_id(uint8_t *rx_buf, uint32_t *id_val);
+static uint8_t get_id_size(enum norfx_id_kind id);
+static enum norfx_status convert_buf_to_id(uint8_t *rx_buf, enum norfx_id_kind id, uint32_t *id_val);
 
 enum norfx_status norfx_reset(struct norfx_device *dev)
 {
@@ -187,7 +188,8 @@ enum norfx_status norfx_write_disable(struct norfx_device *dev)
 enum norfx_status norfx_read_id(struct norfx_device *dev, enum norfx_id_kind id, uint32_t *id_val)
 {
     uint8_t tx_buf = 0;
-    uint8_t rx_buf[3] = {0};
+    uint8_t rx_buf[12] = {0};   /* max: 4 dummy + 8 unique ID bytes */
+    uint8_t rx_len = 0;
 
     if (dev == NULL)
     {
@@ -215,11 +217,28 @@ enum norfx_status norfx_read_id(struct norfx_device *dev, enum norfx_id_kind id,
     switch(id)
     {
         case ID_JEDEC:
+            /* Returns: MFR_ID | MEM_TYPE | CAPACITY (3 bytes) */
             tx_buf = INST_JEDEC_ID;
-            
+            rx_len = get_id_size(ID_JEDEC);
             break;
 
-        // TODO: Add more ID's here...
+        case ID_MANUFACTURER_DEVICE:
+            /* Requires 3 dummy address bytes, returns MFR_ID | DEV_ID (2 bytes) */
+            tx_buf = INST_MANUFACTURER_DEVICE_ID;
+            rx_len = get_id_size(ID_MANUFACTURER_DEVICE);   /* 3 dummy addr + 2 data */
+            break;
+
+        case ID_RELEASE_POWER_DOWN:
+            /* Requires 3 dummy address bytes, returns DEV_ID (1 byte) */
+            tx_buf = INST_RELEASE_POWER_DOWN_ID;
+            rx_len = get_id_size(ID_RELEASE_POWER_DOWN);   /* 3 dummy addr + 1 data */
+            break;
+
+        case ID_READ_UNIQUE:
+            /* Requires 4 dummy bytes, returns 64-bit unique ID (8 bytes) */
+            tx_buf = INST_READ_UNIQUE_ID;
+            rx_len = get_id_size(ID_READ_UNIQUE);  /* 4 dummy + 8 unique */
+            break;
 
         default:
             return NORFX_EINVAL;
@@ -236,7 +255,7 @@ enum norfx_status norfx_read_id(struct norfx_device *dev, enum norfx_id_kind id,
         return NORFX_ERROR;
     }
 
-    if (dev->spi_read(dev->context, rx_buf, sizeof(rx_buf)) != NORFX_SUCCESS)
+    if (dev->spi_read(dev->context, rx_buf, rx_len) != NORFX_SUCCESS)
     {
         (void)dev->spi_chip_deselect(dev->context);
         return NORFX_ERROR;
@@ -247,7 +266,7 @@ enum norfx_status norfx_read_id(struct norfx_device *dev, enum norfx_id_kind id,
         return NORFX_ERROR;
     }
 
-    if (convert_buf_to_id(rx_buf, id_val) != NORFX_SUCCESS)
+    if (convert_buf_to_id(rx_buf, rx_len, id_val) != NORFX_SUCCESS)
     {
         return NORFX_ERROR;
     }
@@ -356,19 +375,69 @@ static enum norfx_status check_id_kind(enum norfx_id_kind id)
     return status;
 }
 
-static enum norfx_status convert_buf_to_id(uint8_t *rx_buf, uint32_t *id_val)
+static uint8_t get_id_size(enum norfx_id_kind id)
 {
-    enum norfx_status status = NORFX_ERROR;
+    uint8_t id_size = 0;
+    switch(id)
+    {
+        case ID_RELEASE_POWER_DOWN:
+            id_size = 4u;
+            break;
+        case ID_MANUFACTURER_DEVICE:
+            id_size = 5u;
+            break;
+        case ID_JEDEC:
+            id_size = 3u;
+            break;
+        case ID_READ_UNIQUE:
+            id_size = 12u;
+            break;
 
+        default:
+            break;
+    }
+
+    return id_size;
+}
+
+static enum norfx_status convert_buf_to_id(uint8_t *rx_buf, enum norfx_id_kind id, uint32_t *id_val)
+{
     if (rx_buf == NULL || id_val == NULL)
     {
-        status = NORFX_EINVAL;
-    }
-    else
-    {
-        *id_val = ((rx_buf[0] << 16) | (rx_buf[1] << 8) | (rx_buf[2]));
-        status = NORFX_SUCCESS;
+        return NORFX_EINVAL;
     }
 
-    return status;
+    switch(id)
+    {
+        case ID_JEDEC:
+            /* ID_JEDEC: MFR_ID | MEM_TYPE | CAPACITY */
+            *id_val = ((uint32_t)rx_buf[0] << 16) |
+                      ((uint32_t)rx_buf[1] << 8)  |
+                      ((uint32_t)rx_buf[2]);
+            break;
+
+        case ID_RELEASE_POWER_DOWN:
+            /* ID_RELEASE_POWER_DOWN: 3 dummy addr + DEV_ID at [3] */
+            *id_val = (uint32_t)rx_buf[3];
+            break;
+
+        case ID_MANUFACTURER_DEVICE:
+            /* ID_MANUFACTURER_DEVICE: 3 dummy addr + MFR_ID | DEV_ID */
+            *id_val = ((uint32_t)rx_buf[3] << 8) |
+                      ((uint32_t)rx_buf[4]);
+            break;
+
+        case ID_READ_UNIQUE:
+            /* ID_READ_UNIQUE: 4 dummy + 8-byte unique ID, packed into 32 LSBs */
+            *id_val = ((uint32_t)rx_buf[8]  << 24) |
+                      ((uint32_t)rx_buf[9]  << 16) |
+                      ((uint32_t)rx_buf[10] << 8)  |
+                      ((uint32_t)rx_buf[11]);
+            break;
+
+        default:
+            return NORFX_EINVAL;
+    }
+
+    return NORFX_SUCCESS;
 }
