@@ -1,25 +1,27 @@
-# This target is only reachable when CMAKE_CROSSCOMPILING is ON.
-# The root CMakeLists.txt enforces that guard before including this directory.
+# ---------------------------------------------------------------------------
+# STM32 port — series selection
 #
-# The consumer (parent firmware project) is responsible for providing the
-# STM32 HAL include path via an INTERFACE or IMPORTED target, e.g.:
+# Set NORFX_STM32_SERIES before adding this library, e.g.:
 #
-#   target_link_libraries(norfx_port_stm32 PRIVATE stm32_hal)
+#   cmake -DNORFX_STM32_SERIES=F4 ..
 #
-# or by appending to target_include_directories below.
+# Supported values: F4
+# ---------------------------------------------------------------------------
 
-add_library(norfx_port_stm32 STATIC
-    port_stm32.c
-)
+if(NOT DEFINED NORFX_STM32_SERIES)
+    message(FATAL_ERROR
+        "[nor_fx] NORFX_STM32_SERIES is not set. "
+        "Pass -DNORFX_STM32_SERIES=<series> (e.g. F4) to CMake."
+    )
+endif()
 
-target_include_directories(norfx_port_stm32
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-)
+string(TOUPPER "${NORFX_STM32_SERIES}" _NORFX_SERIES)
 
-target_link_libraries(norfx_port_stm32
-    PUBLIC
-        norfx_driver
-    PRIVATE
-        # stm32_hal   # <-- uncomment and set by parent project
-)
+if(_NORFX_SERIES STREQUAL "F4")
+    add_subdirectory(f4)
+else()
+    message(FATAL_ERROR
+        "[nor_fx] Unsupported NORFX_STM32_SERIES='${NORFX_STM32_SERIES}'. "
+        "Supported: F4"
+    )
+endif()
