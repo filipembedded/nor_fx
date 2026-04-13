@@ -14,7 +14,7 @@ enum norfx_status spi_chip_select(void *context)
     else
     {
         port_context = (stm32f4x_port_context_t *)context;
-        HAL_GPIO_WritePin(port_context->cs_port, port_context->cs_pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin((GPIO_TypeDef *)port_context->cs_port, port_context->cs_pin, GPIO_PIN_RESET);
         status = NORFX_SUCCESS;
     }
 
@@ -32,7 +32,7 @@ enum norfx_status spi_chip_deselect(void *context)
     else
     {
         port_context = (stm32f4x_port_context_t *)context;
-        HAL_GPIO_WritePin(port_context->cs_port, port_context->cs_pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin((GPIO_TypeDef *)port_context->cs_port, port_context->cs_pin, GPIO_PIN_SET);
         status = NORFX_SUCCESS;
     }
 
@@ -48,7 +48,7 @@ enum norfx_status spi_write(void *context, uint8_t *data, uint16_t size)
 
     stm32f4x_port_context_t *port_context = (stm32f4x_port_context_t *)context;
 
-    HAL_StatusTypeDef h_status = HAL_SPI_Transmit(port_context->hspi, data, size, SPI_TIMEOUT_MS);
+    HAL_StatusTypeDef h_status = HAL_SPI_Transmit((SPI_HandleTypeDef *)port_context->hspi, data, size, SPI_TIMEOUT_MS);
     if (h_status != HAL_OK)
     {
         return NORFX_ERROR;
@@ -66,7 +66,7 @@ enum norfx_status spi_read(void *context, uint8_t *data, uint16_t size)
 
     stm32f4x_port_context_t *port_context = (stm32f4x_port_context_t *)context;
 
-    HAL_StatusTypeDef h_status = HAL_SPI_Receive(port_context->hspi, data, size, SPI_TIMEOUT_MS);
+    HAL_StatusTypeDef h_status = HAL_SPI_Receive((SPI_HandleTypeDef *)port_context->hspi, data, size, SPI_TIMEOUT_MS);
     if (h_status != HAL_OK)
     {
         return NORFX_ERROR;
