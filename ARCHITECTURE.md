@@ -7,8 +7,8 @@
 - **Self-contained tests**: the library can build and test itself on a Linux
   host with no hardware required, using a file-backed NOR flash simulator.
 - **Clean submodule integration**: when consumed as a git submodule by a
-  parent project (e.g. `stm32-nvs-demos`), tests and host-only targets are
-  silently excluded — the parent sees only the targets it needs.
+  parent project (e.g. `stm32-nvs-demos`), only explicitly requested optional
+  components are built — the parent sees only the targets it asks for.
 - **No HAL leakage**: platform headers (e.g. `stm32f4xx_hal.h`) never appear
   in public `.h` files; they are confined to the corresponding `.c` port file.
 
@@ -34,18 +34,17 @@ nor_fx/
 │
 ├── port/
 │   ├── stm32/
-│   │   ├── port_stm32.h            # NO HAL includes — uses void* for HAL types
-│   │   ├── port_stm32.c            # includes stm32xxx_hal.h HERE only
-│   │   └── CMakeLists.txt          # target: norfx_port_stm32 (STATIC)
-│   │                               # only built when CMAKE_CROSSCOMPILING=ON
+│   │   └── f4/
+│   │       ├── stm32f4x_port.h     # NO HAL includes — uses void* for HAL types
+│   │       ├── stm32f4x_port.c     # includes stm32f4xx_hal.h HERE only
+│   │       └── CMakeLists.txt      # target: norfx_port_stm32 (+ alias norfx_port_stm32_f4)
 │   └── native_sim/linux/
 │       ├── port_linux.h            # Linux simulator public API
 │       ├── port_linux.c            # mmap-backed flash simulator
-│       └── CMakeLists.txt          # target: norfx_port_linux (STATIC)
-│                                   # only built when NOT CMAKE_CROSSCOMPILING
+│       └── CMakeLists.txt          # target: norfx_port_linux (+ alias norfx_port_native_linux)
 │
 └── tests/
-    ├── CMakeLists.txt              # only included when PROJECT_IS_TOP_LEVEL
+  ├── CMakeLists.txt              # only included when NORFX_BUILD_TESTS=ON
     ├── unity/                      # Unity test framework (git submodule)
     │   ├── unity.c
     │   └── unity.h
@@ -64,22 +63,25 @@ nor_fx/
 ```
 norfx_driver          (STATIC — driver/nor_fx.c)
     │
-    ├── norfx_port_stm32    (STATIC — port/stm32/port_stm32.c)
-    │       [cross-compile only, links STM32 HAL from parent]
+    ├── norfx_port_stm32    (STATIC — port/stm32/f4/stm32f4x_port.c)
+    │       [explicitly enabled STM32F4 port]
+    │       [public alias: norfx_port_stm32_f4]
     │
     ├── norfx_port_linux    (STATIC — port/native_sim/linux/port_linux.c)
-    │       [host only]
+    │       [explicitly enabled host port]
+    │       [public alias: norfx_port_native_linux]
     │
     ├── norfx_lfs           (STATIC — fs/littlefs/nor_flash_lfs.c)
-    │       [optional, requires lfs target]
+    │       [optional, requires NORFX_BUILD_LFS=ON]
     │
-    └── tests/              (executables — host only, top-level only)
+    └── tests/              (executables — host only, built when NORFX_BUILD_TESTS=ON)
             test_norfx_reset
             test_norfx_read
             test_norfx_fast_read
             test_norfx_page_program
             test_norfx_erase_sector
             test_norfx_write
+            test_norfx_lfs        [only when norfx_lfs is enabled]
 ```
 
 ---
@@ -97,33 +99,37 @@ ctest --test-dir build --output-on-failure
 
 What gets built:
 - `norfx_driver`
-- `norfx_port_linux`
+- `norfx_port_linux` / `norfx_port_native_linux`
+- `norfx_lfs`
 - all test executables
 - Unity
 
 What does NOT get built:
-- `norfx_port_stm32` (CMAKE_CROSSCOMPILING is OFF)
-- `norfx_lfs` (unless littlefs is available)
+- `norfx_port_stm32` / `norfx_port_stm32_f4`
 
 ### 4b. Submodule — consumed by parent firmware project
 
 ```cmake
 # stm32-nvs-demos/CMakeLists.txt  (or STM32CubeIDE / Makefile equivalent)
+set(NORFX_BUILD_PORT_STM32_F4 ON CACHE BOOL "" FORCE)
 add_subdirectory(libraries/nor_fx)
+
+target_link_libraries(norfx_port_stm32 PRIVATE stm32_hal)
 
 target_link_libraries(my_firmware PRIVATE
     norfx_driver
-    norfx_port_stm32   # only if CMAKE_CROSSCOMPILING
+    norfx_port_stm32_f4
 )
 ```
 
 What gets built:
 - `norfx_driver`
-- `norfx_port_stm32` (CMAKE_CROSSCOMPILING is ON)
+- `norfx_port_stm32` / `norfx_port_stm32_f4` (because parent explicitly enabled `NORFX_BUILD_PORT_STM32_F4`)
 
 What does NOT get built:
-- `tests/` (PROJECT_IS_TOP_LEVEL is FALSE → guard triggers)
-- `norfx_port_linux`
+- `tests/` unless explicitly enabled
+- `norfx_port_linux` / `norfx_port_native_linux` unless explicitly enabled
+- `norfx_lfs` unless explicitly enabled
 
 ---
 
@@ -142,7 +148,7 @@ port_stm32.c  ← private, #include "stm32xxx_hal.h" HERE ONLY
 This means:
 - `port_stm32.h` can be included anywhere without triggering a HAL dependency.
 - The HAL header path is only needed when compiling `port_stm32.c`, which
-  only happens during a cross-compile build where the HAL is available.
+  only happens when the STM32 port target is explicitly enabled.
 
 ### Linux simulator port
 
@@ -187,6 +193,5 @@ Test categories:
    - `spi_read`
    - `get_tick_ms`
    - `delay_ms`
-4. Add `port/<platform>/CMakeLists.txt` with an appropriate
-   `if(CMAKE_CROSSCOMPILING)` or platform detection guard.
+4. Add `port/<platform>/CMakeLists.txt` as an explicit optional target.
 5. Document the port in this file under a new section.

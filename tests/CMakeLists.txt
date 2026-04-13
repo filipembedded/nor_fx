@@ -32,7 +32,7 @@ function(norfx_add_test target source)
     target_link_libraries(${target}
         PRIVATE
             norfx_driver
-            norfx_port_linux
+            norfx_port_native_linux
             unity
     )
 
@@ -60,7 +60,7 @@ function(norfx_add_lfs_test target source)
         PRIVATE
             norfx_driver
             norfx_lfs
-            norfx_port_linux
+            norfx_port_native_linux
             unity
     )
 
@@ -96,4 +96,7 @@ norfx_add_test(test_norfx_fast_read     test_norfx_fast_read.c)
 norfx_add_test(test_norfx_page_program  test_norfx_page_program.c)
 norfx_add_test(test_norfx_erase_sector  test_norfx_erase_sector.c)
 norfx_add_test(test_norfx_write         test_norfx_write.c)
-norfx_add_lfs_test(test_norfx_lfs       test_norfx_lfs.c)
+
+if(TARGET norfx_lfs)
+    norfx_add_lfs_test(test_norfx_lfs   test_norfx_lfs.c)
+endif()
