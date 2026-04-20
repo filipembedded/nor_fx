@@ -17,9 +17,14 @@ project(
 # ---------------------------------------------------------------------------
 if(PROJECT_IS_TOP_LEVEL)
     set(_NORFX_DEFAULT_BUILD_LFS ON)
-    set(_NORFX_DEFAULT_BUILD_PORT_NATIVE_LINUX ON)
+    if(UNIX AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(_NORFX_DEFAULT_BUILD_PORT_NATIVE_LINUX ON)
+        set(_NORFX_DEFAULT_BUILD_TESTS ON)
+    else()
+        set(_NORFX_DEFAULT_BUILD_PORT_NATIVE_LINUX OFF)
+        set(_NORFX_DEFAULT_BUILD_TESTS OFF)
+    endif()
     set(_NORFX_DEFAULT_BUILD_PORT_STM32_F4 OFF)
-    set(_NORFX_DEFAULT_BUILD_TESTS ON)
 else()
     set(_NORFX_DEFAULT_BUILD_LFS OFF)
     set(_NORFX_DEFAULT_BUILD_PORT_NATIVE_LINUX OFF)
@@ -90,6 +95,12 @@ endif()
 # ---------------------------------------------------------------------------
 # Host-side simulation port for tests and local development.
 if(NORFX_BUILD_PORT_NATIVE_LINUX)
+    if(NOT (UNIX AND CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+        message(FATAL_ERROR
+            "[nor_fx] NORFX_BUILD_PORT_NATIVE_LINUX=ON is only supported on Linux hosts."
+        )
+    endif()
+
     add_subdirectory(port/native_sim/linux)
 endif()
 
