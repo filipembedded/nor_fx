@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# norfx_port_stm32 — STM32F4 series port
+# norfx_port_stm32 — STM32F4 port implementation
 #
 # Requires the parent project to provide an stm32_hal INTERFACE target (or
 # equivalent) that exposes the STM32F4xx HAL headers. Example:
@@ -18,6 +18,9 @@
 add_library(norfx_port_stm32 STATIC
     stm32f4x_port.c
 )
+
+# Clearer public name retained alongside the original target for compatibility.
+add_library(norfx_port_stm32_f4 ALIAS norfx_port_stm32)
 
 target_include_directories(norfx_port_stm32
     PUBLIC

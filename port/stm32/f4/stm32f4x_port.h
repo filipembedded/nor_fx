@@ -4,8 +4,8 @@
 #include "nor_fx.h"
 
 typedef struct {
-    SPI_HandleTypeDef *hspi;
-    GPIO_TypeDef *cs_port;
+    void    *hspi;      /* SPI_HandleTypeDef* — void* to avoid HAL header in .h */
+    void    *cs_port;   /* GPIO_TypeDef*       — void* for the same reason        */
     uint16_t cs_pin;
 } stm32f4x_port_context_t;
 

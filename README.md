@@ -81,7 +81,7 @@ Create a `.c` / `.h` pair under `port/<platform>/` and implement the six callbac
 - **No platform headers in `.h`** — use `void *` for HAL handle types. Cast inside the `.c` file only.
 - Implement a `struct norfx_<platform>_ctx` to carry the hardware handles passed through `void *context`.
 
-A complete port for STM32 (HAL SPI) is located at `port/stm32/`.  
+A complete STM32F4 port (HAL SPI) is located at `port/stm32/f4/`.  
 A Linux simulation port (file-backed, no hardware needed) is located at `port/native_sim/linux/`.
 
 Minimal port skeleton:
@@ -156,7 +156,17 @@ norfx_sim_deinit(&ctx);
 
 ## Building and Running Tests
 
-The library uses CMake. Tests are only built when the library is the top-level CMake project (i.e. not consumed as a submodule).
+The library uses explicit CMake options for optional components.
+
+Default behavior:
+- standalone (`PROJECT_IS_TOP_LEVEL=TRUE`): builds the Linux simulation port, `norfx_lfs`, and tests,
+- submodule / parent-project mode: builds only `norfx_driver` unless the parent explicitly enables other components.
+
+Important options:
+- `NORFX_BUILD_LFS`
+- `NORFX_BUILD_PORT_NATIVE_LINUX`
+- `NORFX_BUILD_PORT_STM32_F4`
+- `NORFX_BUILD_TESTS`
 
 ```bash
 git submodule update --init --recursive   # pulls Unity test framework
@@ -165,25 +175,36 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Expected output:
+Expected output (depending on whether `NORFX_BUILD_LFS` is enabled):
 
 ```
 100% tests passed, 0 tests failed out of 6
+# or
+100% tests passed, 0 tests failed out of 7
 ```
 
 ## Submodule Integration
 
-When consumed as a git submodule, tests and host-only targets are automatically excluded:
+When consumed as a git submodule, the parent project explicitly selects the optional NORFX components it needs:
 
 ```cmake
 # Parent project CMakeLists.txt
+set(NORFX_BUILD_PORT_STM32_F4 ON CACHE BOOL "" FORCE)
 add_subdirectory(libraries/nor_fx)
+
+# Provide STM32 HAL headers/includes to the actual STM32 port target.
+target_link_libraries(norfx_port_stm32 PRIVATE stm32cubemx)
 
 target_link_libraries(my_firmware PRIVATE
     norfx_driver
-    norfx_port_stm32
+    norfx_port_stm32_f4
 )
 ```
+
+Compatibility notes:
+- `norfx_port_stm32` remains the concrete target used to attach STM32 HAL dependencies.
+- `norfx_port_stm32_f4` is provided as a clearer alias for linking from firmware targets.
+- `norfx_port_native_linux` is provided as a clearer alias for the Linux simulator target.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for a full description of the CMake target graph and design decisions.
 
