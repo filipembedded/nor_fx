@@ -175,9 +175,11 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Expected output:
+Expected output (depending on whether `NORFX_BUILD_LFS` is enabled):
 
 ```
+100% tests passed, 0 tests failed out of 6
+# or
 100% tests passed, 0 tests failed out of 7
 ```
 
